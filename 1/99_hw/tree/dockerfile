@@ -1,0 +1,6 @@
+# docker build -t go-started .
+FROM golang:1.21
+COPY . .
+ENV GO111MODULE=off
+RUN go test -v
+#docker run -d go-started  bash -c "tail -f /dev/null"
