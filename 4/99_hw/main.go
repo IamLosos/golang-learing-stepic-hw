@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
@@ -27,7 +28,7 @@ type Row struct {
 	Picture       string `xml:"picture"`
 	Age           int    `xml:"age"`
 	EyeColor      string `xml:"eyeColor"`
-	First_name    string `xml:"first_name"`
+	First_name    string `xml:"first_name" json:"Name"`
 	Last_name     string `xml:"last_name"`
 	Gender        string `xml:"gender"`
 	Company       string `xml:"company"`
@@ -163,19 +164,11 @@ func (p *PersonsDataset) SearchServer(query string, orderField string, orderBy i
 	return p2.Rows
 }
 
-func (p *PersonsDataset) SearchServerByQuerryParams(qp QueryParams) []Row {
-	return p.SearchServer(qp.Querry, qp.OrderField, qp.OrderBy, qp.Limit, qp.Offset)
+func (p *PersonsDataset) SearchServerByQuerryParams(qp SearchRequest) []Row {
+	return p.SearchServer(qp.Query, qp.OrderField, qp.OrderBy, qp.Limit, qp.Offset)
 }
 
-type QueryParams struct {
-	Querry     string
-	OrderField string
-	OrderBy    int
-	Limit      int
-	Offset     int
-}
-
-func (p *QueryParams) CheckParams() error {
+func (p *SearchRequest) CheckParams() error {
 	if !slices.Contains([]string{"Id", "Age", "Name", ""}, p.OrderField) {
 		return fmt.Errorf("'order_field' wrong value %s", p.OrderField)
 	}
@@ -195,8 +188,8 @@ func (p *QueryParams) CheckParams() error {
 	return nil
 }
 
-func (p *QueryParams) ParseParams(r *http.Request) error {
-	p.Querry = r.URL.Query().Get("query")
+func (p *SearchRequest) ParseParams(r *http.Request) error {
+	p.Query = r.URL.Query().Get("query")
 	p.OrderField = r.URL.Query().Get("order_field")
 
 	var err error
@@ -219,9 +212,10 @@ func (p *QueryParams) ParseParams(r *http.Request) error {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	var qp QueryParams = QueryParams{}
+	var qp SearchRequest = SearchRequest{}
 	err := qp.ParseParams(r)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
 		return
 	}
@@ -232,9 +226,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for _, r := range basicPersonsDataset.SearchServerByQuerryParams(qp) {
-		w.Write([]byte(fmt.Sprintln(r)))
+	j, err := json.Marshal(basicPersonsDataset.SearchServerByQuerryParams(qp))
+	if err != nil {
+		w.Write([]byte(err.Error()))
+		return
 	}
+
+	w.Write(j)
 }
 
 func runServer() {
